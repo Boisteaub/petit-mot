@@ -1,0 +1,170 @@
+/* Page « Un petit mot » : grands caractères, couleurs de la maison (sauge, crème, terracotta). */
+
+:root {
+  --creme: #F7F1E7;
+  --blanc: #FFFFFF;
+  --sauge: #6F8F72;
+  --sauge-fonce: #4F6B54;
+  --sauge-clair: #E6EFE4;
+  --terracotta: #C8553D;
+  --encre: #2F3A31;
+  --gris: #5F625B;
+  --trait: #E8E0D2;
+  --ombre: 0 6px 20px rgba(60, 50, 30, .08);
+  --titres: "Noto Serif", Georgia, serif;
+  --texte: Roboto, "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--creme);
+  color: var(--encre);
+  font: 19px/1.45 var(--texte);
+}
+
+.haut {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: calc(14px + env(safe-area-inset-top)) 16px 14px;
+  background: var(--blanc);
+  box-shadow: 0 1px 0 var(--trait);
+}
+
+.avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--sauge-clair);
+  font-size: 26px;
+}
+
+h1 {
+  margin: 0;
+  font: 600 24px/1.2 var(--titres);
+  color: var(--sauge-fonce);
+}
+
+#sous-titre {
+  margin: 2px 0 0;
+  font-size: 15px;
+  color: var(--gris);
+}
+
+main {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+
+.vide {
+  margin: auto 0;
+  text-align: center;
+  color: var(--gris);
+}
+
+.bulle {
+  max-width: 82%;
+  padding: 10px 14px 8px;
+  border-radius: 18px;
+  background: var(--blanc);
+  box-shadow: 0 1px 1.5px rgba(0, 0, 0, .12);
+  overflow-wrap: anywhere;
+}
+
+.bulle.moi {
+  align-self: flex-end;
+  background: #DCEFD9;
+  border-bottom-right-radius: 6px;
+}
+
+.bulle.elle {
+  align-self: flex-start;
+  border-bottom-left-radius: 6px;
+}
+
+.bulle p { margin: 0; }
+
+.bulle small {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--gris);
+  text-align: right;
+}
+
+.bulle .remis { color: var(--sauge-fonce); font-weight: 700; }
+
+form {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  background: var(--blanc);
+  box-shadow: 0 -1px 0 var(--trait);
+}
+
+textarea {
+  flex: 1;
+  min-height: 52px;
+  max-height: 140px;
+  padding: 12px 14px;
+  border: 2px solid var(--trait);
+  border-radius: 18px;
+  background: var(--creme);
+  color: var(--encre);
+  font: inherit;
+  resize: none;
+}
+
+textarea:focus { outline: 3px solid var(--sauge); outline-offset: 1px; }
+
+button {
+  min-height: 52px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--sauge-fonce);
+  color: #fff;
+  font: 700 18px var(--texte);
+}
+
+button:disabled { opacity: .5; }
+
+.note {
+  margin: 0;
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+  font-size: 14px;
+  color: var(--gris);
+  text-align: center;
+}
+
+.note:empty { display: none; }
+
+.cache {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.erreur { color: var(--terracotta); font-weight: 700; }
+
+@media (prefers-color-scheme: dark) {
+  :root { --creme: #1F2420; --blanc: #2A302B; --encre: #EEF1EC; --gris: #B9C0B6; --trait: #3A423B; --sauge-clair: #34413A; --sauge-fonce: #8FB394; }
+  .bulle.moi { background: #33503A; }
+  button { background: #4F6B54; }
+}
