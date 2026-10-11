@@ -200,3 +200,28 @@ button:disabled { opacity: .5; }
   button { background: #4F6B54; }
   .reessayer { background: #DCEFD9; color: #1F2420; }
 }
+
+/* ---------------------------------------------------------------- ma photo, photos et vidéos (12/10) */
+button.avatar { min-height: 0; padding: 0; overflow: hidden; color: inherit; border: 2px solid var(--sauge); }
+button.avatar img { width: 100%; height: 100%; object-fit: cover; }
+button.avatar:focus-visible, .joindre:focus-within { outline: 3px solid var(--sauge); outline-offset: 2px; }
+.photo-etat { margin: 2px 0 0; font-size: 16px; color: var(--sauge-fonce); }
+.photo-etat.non { color: var(--rouge); }
+
+.joindre {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  background: var(--sauge-clair);
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.joindre.inactif { opacity: .5; pointer-events: none; }
+
+.bulle .apercu { display: block; max-width: 100%; max-height: 240px; margin-bottom: 6px; border-radius: 12px; }
+.bulle .media { font-weight: 700; }
+.bulle .progres { color: var(--sauge-fonce); font-weight: 700; }

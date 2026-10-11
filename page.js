@@ -49,6 +49,7 @@
   const relais = RELAIS + '/' + L.s;
   const enfant = (typeof L.a === 'string' && L.a.trim()) || 'l\'enfant';
   const contact = typeof L.c === 'string' ? L.c.trim() : '';
+  const deNom = (nom) => (/^[aeiouyhàâéèêëîïôûù]/i.test(nom) ? `d'${nom}` : `de ${nom}`);     // « d'Alice », « de Léa »
 
   document.title = `Un petit mot pour ${enfant}`;
   $('titre').textContent = `Écrire à ${enfant}`;
@@ -106,14 +107,29 @@
     return el;
   }
 
+  const NOMS_MEDIA = { photo: '📷 Photo', gif: '🎞️ GIF', video: '🎬 Vidéo' };
+  const minutes = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
   function bulle(m) {
-    const aRenvoyer = m.moi && m.etat === 'erreur' && !revoque;
+    // une photo ou une vidéo ne repart que si ce téléphone l'a encore (pas après avoir fermé la page)
+    const perdu = m.media && m.etat === 'erreur' && !fichiersPrets.has(m.n);
+    const aRenvoyer = m.moi && m.etat === 'erreur' && !revoque && !perdu;
+    const relancer = () => (m.media ? envoyerMedia(m) : envoyer(m));
+    const contenu = m.media
+      ? [m.apercu ? h('img', { class: 'apercu', src: m.apercu, alt: NOMS_MEDIA[m.media] }) : h('p', { class: 'media' }, NOMS_MEDIA[m.media]
+          + (m.duree ? `${NBSP}· ${minutes(m.duree)}` : '')),
+        m.texte ? h('p', {}, m.texte) : null]
+      : [h('p', {}, m.texte)];
     return h('div', {
       class: 'bulle ' + (m.moi ? 'moi' : 'elle'),
-      onclick: aRenvoyer ? () => envoyer(m) : null,
-    }, h('p', {}, m.texte),
-    h('small', {}, heure(m.cree), m.moi ? `${NBSP}· ` : '', m.moi ? etatDe(m) : ''),
-    aRenvoyer ? h('button', { type: 'button', class: 'reessayer', onclick: (e) => { e.stopPropagation(); envoyer(m); } }, 'Réessayer') : null);
+      'data-n': m.n || null,
+      onclick: aRenvoyer ? relancer : null,
+    }, ...contenu,
+    h('small', {}, heure(m.cree), m.moi ? `${NBSP}· ` : '',
+      m.moi ? (perdu ? h('span', { class: 'erreur' }, 'Pas parti : choisis-le à nouveau')
+        : m.media && m.etat === 'envoi' ? h('span', { class: 'progres' }, `Envoi… ${Math.round((m.progres || 0) * 100)}${NBSP}%`)
+          : etatDe(m)) : ''),
+    aRenvoyer ? h('button', { type: 'button', class: 'reessayer', onclick: (e) => { e.stopPropagation(); relancer(); } }, 'Réessayer') : null);
   }
 
   function dessiner() {
@@ -127,6 +143,7 @@
     $('saisie').hidden = true;
     $('note').hidden = true;
     $('plus-valable').hidden = false;
+    $('ma-photo').disabled = true;
   }
 
   // ---------------------------------------------------------------- le relais
@@ -178,6 +195,15 @@
       const m = memoire.messages.find((x) => x.moi && x.n === p.n);
       if (m) avancer(m, 'envoye');
       else memoire.messages.push({ moi: true, n: p.n, texte: p.texte, cree: p.cree || evenement.time, etat: 'envoye' });
+    } else if (p.type === 'media' && p.de === 'contact') {
+      const m = memoire.messages.find((x) => x.moi && x.n === p.n);
+      if (m) avancer(m, 'envoye');
+    } else if (p.type === 'photo' && p.de !== 'contact') {
+      if (photo && photo.n === p.n && ['recue', 'acceptee', 'refusee'].includes(p.etat)) {
+        photo.etat = p.etat;
+        garder('photo:' + L.s, JSON.stringify(photo));
+        dessinerPhoto();
+      }
     } else if (['recu', 'remis', 'lu', 'refuse'].includes(p.type)) {
       const m = memoire.messages.find((x) => x.moi && x.n === p.ref);
       if (m) avancer(m, p.type);
@@ -270,8 +296,8 @@
 
   // Les messages qui ne sont pas partis repartent, dans l'ordre ; on s'arrête au premier échec.
   async function renvoyer() {
-    for (const m of memoire.messages.filter((x) => x.moi && x.etat === 'erreur')) {
-      await envoyer(m);
+    for (const m of memoire.messages.filter((x) => x.moi && x.etat === 'erreur' && (!x.media || fichiersPrets.has(x.n)))) {
+      await (m.media ? envoyerMedia(m) : envoyer(m));
       if (m.etat === 'erreur') break;
     }
   }
@@ -315,15 +341,231 @@
     envoyer(m);
   });
 
+  // ---------------------------------------------------------------- images (12/10)
+
+  function avis(texte) {
+    const a = $('avis');
+    a.textContent = texte;
+    a.hidden = !texte;
+    clearTimeout(avis.minuteur);
+    if (texte) avis.minuteur = setTimeout(() => { a.hidden = true; }, 7000);
+  }
+
+  // L'image est lue en « data: » (la règle de sécurité de la page refuse les « blob: » pour les images).
+  function lireImage(fichier) {
+    return new Promise((fin, echec) => {
+      const lecteur = new FileReader();
+      lecteur.onload = () => {
+        const img = new Image();
+        img.onload = () => (img.width && img.height ? fin(img) : echec(new Error('vide')));
+        img.onerror = echec;
+        img.src = lecteur.result;
+      };
+      lecteur.onerror = echec;
+      lecteur.readAsDataURL(fichier);
+    });
+  }
+
+  /** Image redessinée : « carre » recadre au centre (photo de profil), sinon tout tient dans max × max. */
+  function redessiner(img, max, carre, qualite) {
+    const k = carre ? Math.max(max / img.width, max / img.height) : Math.min(1, max / Math.max(img.width, img.height));
+    const toile = document.createElement('canvas');
+    toile.width = carre ? max : Math.round(img.width * k);
+    toile.height = carre ? max : Math.round(img.height * k);
+    const g = toile.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(img, (toile.width - img.width * k) / 2, (toile.height - img.height * k) / 2, img.width * k, img.height * k);
+    return toile.toDataURL('image/jpeg', qualite);
+  }
+
+  const octetsDe = (dataUrl) => Chiffre.depuisBase64(dataUrl.slice(dataUrl.indexOf(',') + 1));
+
+  // ---------------------------------------------------------------- ma photo
+  //
+  // La personne choisit sa photo : réduite ici (192 × 192), envoyée en petits morceaux chiffrés par le relais
+  // (4 Ko au plus par message) ; un parent l'accepte avant qu'elle remplace son initiale sur la télé de l'enfant.
+
+  let photo = (() => { try { return JSON.parse(lire('photo:' + L.s)); } catch (e) { return null; } })();   // {n, image, etat}
+  let photoEnVol = false;
+
+  function dessinerPhoto() {
+    const bouton = $('ma-photo');
+    const montre = photo && photo.etat !== 'refusee';
+    bouton.replaceChildren(montre ? h('img', { src: photo.image, alt: '' }) : '✉️');
+    bouton.setAttribute('aria-label', montre ? 'Changer ma photo' : 'Choisir ma photo');
+    const etat = $('photo-etat');
+    const textes = {
+      envoi: 'Ta photo part…',
+      envoyee: `Ta photo est partie${NBSP}: les parents ${deNom(enfant)} vont la regarder.`,
+      recue: `Ta photo attend l'accord des parents ${deNom(enfant)}.`,
+      acceptee: `Ta photo est sur la télé ${deNom(enfant)}${NBSP}✓`,
+      refusee: 'Ta photo n\'a pas été acceptée. Tu peux en choisir une autre.',
+      erreur: 'Ta photo n\'est pas partie. Touche ton rond pour réessayer.',
+    };
+    etat.textContent = photo ? textes[photo.etat] || '' : `Touche le rond pour choisir ta photo${NBSP}: ${enfant} la verra sur sa télé.`;
+    etat.classList.toggle('non', !!photo && ['refusee', 'erreur'].includes(photo.etat));
+    etat.hidden = revoque;
+  }
+
+  async function envoyerPhoto(fichier) {
+    if (revoque || photoEnVol) return;
+    let image;
+    try {
+      const img = await lireImage(fichier);
+      for (const q of [0.75, 0.55, 0.4]) {                 // au plus 16 morceaux de 2 400 caractères
+        image = redessiner(img, 192, true, q);
+        if (image.length - image.indexOf(',') - 1 <= 16 * 2400) break;
+      }
+    } catch (e) {
+      return avis('Cette photo ne peut pas être lue. Choisis-en une autre (JPEG ou PNG).');
+    }
+    const b64 = image.slice(image.indexOf(',') + 1);
+    const n = Math.random().toString(36).slice(2, 12);
+    const morceaux = b64.match(/.{1,2400}/g);
+    const precedente = photo;
+    photo = { n, image, etat: 'envoi' };
+    photoEnVol = true;
+    dessinerPhoto();
+    try {
+      for (const [i, morceau] of morceaux.entries()) {
+        await publier({ type: 'photo', de: 'contact', n, i, total: morceaux.length, morceau });
+      }
+      if (photo.etat === 'envoi') photo.etat = 'envoyee';      // la maison a peut-être déjà répondu « reçue »
+    } catch (e) {
+      photo.etat = 'erreur';
+      if (precedente && precedente.etat === 'acceptee') avis('Ta photo n\'est pas partie : celle d\'avant reste sur la télé.');
+    }
+    photoEnVol = false;
+    garder('photo:' + L.s, JSON.stringify(photo));
+    dessinerPhoto();
+  }
+
+  // ---------------------------------------------------------------- photos, GIF et vidéos pour l'enfant
+  //
+  // Le fichier est chiffré ici avec la clé du lien, puis déposé en pièce jointe sur le relais (15 Mo au plus,
+  // gardé 3 h) avec une petite enveloppe chiffrée qui dit ce que c'est. La maison le récupère, ses parents
+  // l'acceptent, puis il arrive sur la télé.
+
+  const OCTETS_MAX = 15000000;
+  const fichiersPrets = new Map();      // n → octets du fichier (pour « Réessayer » tant que la page est ouverte)
+
+  function dureeVideo(fichier) {
+    return new Promise((fin) => {
+      const url = URL.createObjectURL(fichier);
+      const v = document.createElement('video');
+      let fini = false;
+      const partir = (s) => { if (fini) return; fini = true; clearTimeout(secours); URL.revokeObjectURL(url); fin(s); };
+      const secours = setTimeout(() => partir(0), 5000);
+      v.preload = 'metadata';
+      v.onloadedmetadata = () => partir(Number.isFinite(v.duration) ? Math.round(v.duration) : 0);
+      v.onerror = () => partir(0);
+      v.src = url;
+    });
+  }
+
+  async function preparerMedia(fichier) {
+    if (fichier.type === 'image/gif') {
+      return { media: 'gif', octets: new Uint8Array(await fichier.arrayBuffer()), apercu: null };
+    }
+    if (fichier.type.startsWith('image/')) {
+      const img = await lireImage(fichier);
+      const photo_ = redessiner(img, 1280, false, 0.82);
+      return { media: 'photo', octets: octetsDe(photo_), apercu: redessiner(img, 240, false, 0.6) };
+    }
+    if (fichier.type.startsWith('video/')) {
+      return { media: 'video', octets: new Uint8Array(await fichier.arrayBuffer()), duree: await dureeVideo(fichier), apercu: null };
+    }
+    throw new Error('type');
+  }
+
+  function deposer(chiffre, enveloppe, avance) {
+    return new Promise((fin, echec) => {
+      const x = new XMLHttpRequest();
+      // sans en-tête particulier : le relais accepte l'envoi directement depuis la page
+      x.open('POST', `${relais}?filename=m.bin&message=${encodeURIComponent(enveloppe)}`);
+      x.timeout = 300000;
+      x.upload.onprogress = (e) => { if (e.lengthComputable) avance(e.loaded / e.total); };
+      x.onload = () => (x.status >= 200 && x.status < 300 ? fin() : echec(new Error(String(x.status))));
+      x.onerror = () => echec(new Error('réseau'));
+      x.ontimeout = () => echec(new Error('trop long'));
+      x.send(new Blob([chiffre]));
+    });
+  }
+
+  function montrerProgres(m) {
+    const p = document.querySelector(`.bulle[data-n="${m.n}"] .progres`);
+    if (p) p.textContent = `Envoi… ${Math.round((m.progres || 0) * 100)}${NBSP}%`;
+  }
+
+  async function envoyerMedia(m) {
+    const octets = fichiersPrets.get(m.n);
+    if (revoque || !octets || enVol.has(m.n)) return;
+    enVol.add(m.n);
+    m.etat = 'envoi';
+    m.progres = 0;
+    sauver();
+    dessiner();
+    try {
+      const enveloppe = await Chiffre.sceller(L.k, JSON.stringify({
+        type: 'media', de: 'contact', n: m.n, genre: m.media, legende: m.texte || '', duree: m.duree || 0, cree: m.cree,
+      }));
+      const chiffre = await Chiffre.scellerFichier(L.k, octets, (f) => { m.progres = f * 0.1; montrerProgres(m); });
+      await deposer(chiffre, enveloppe, (f) => { m.progres = 0.1 + f * 0.9; montrerProgres(m); });
+      relaisRepond(true);
+      avancer(m, 'envoye');
+      fichiersPrets.delete(m.n);
+    } catch (e) {
+      if (m.etat === 'envoi') m.etat = 'erreur';
+      if (navigator.onLine === false) relaisRepond(false);
+    }
+    enVol.delete(m.n);
+    sauver();
+    dessiner();
+  }
+
+  async function joindre(fichier) {
+    if (revoque) return;
+    if (fichier.size > (fichier.type.startsWith('video/') || fichier.type === 'image/gif' ? OCTETS_MAX : 40000000)) {
+      return avis(fichier.type.startsWith('video/')
+        ? 'Vidéo trop lourde : 15 Mo au plus (environ 30 secondes filmées au téléphone).'
+        : 'Fichier trop lourd : 15 Mo au plus.');
+    }
+    let pret;
+    try {
+      pret = await preparerMedia(fichier);
+    } catch (e) {
+      return avis('Ce fichier ne peut pas être lu. Choisis une photo, un GIF ou une vidéo.');
+    }
+    const texte = champ.value.trim().replace(/\s+/g, ' ').slice(0, 200);     // ce qui est écrit devient la légende
+    champ.value = '';
+    champ.style.height = 'auto';
+    const m = {
+      moi: true, n: Math.random().toString(36).slice(2, 12), media: pret.media, texte, duree: pret.duree || 0,
+      apercu: pret.apercu, cree: Math.floor(Date.now() / 1000), etat: 'envoi',
+    };
+    fichiersPrets.set(m.n, pret.octets);
+    memoire.messages.push(m);
+    envoyerMedia(m);
+  }
+
+  $('ma-photo').addEventListener('click', () => { if (!revoque && !photoEnVol) $('choix-photo').click(); });
+  $('choix-photo').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) envoyerPhoto(f); });
+  $('choix-fichier').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) joindre(f); });
+
   // ---------------------------------------------------------------- au démarrage
 
   // Les anciens messages de plus de 60 jours sont oubliés sur ce téléphone ;
   // un message resté « Envoi… » (page fermée trop tôt) repartira tout seul.
   memoire.messages = memoire.messages.filter((m) => Date.now() / 1000 - m.cree < 60 * JOUR);
   for (const m of memoire.messages) if (m.moi && m.etat === 'envoi') m.etat = 'erreur';
+  if (photo && photo.etat === 'envoi') photo.etat = 'erreur';
 
   if (revoque) montrerRevoque();
-  else $('saisie').hidden = false;
+  else {
+    $('saisie').hidden = false;
+    $('ma-photo').disabled = false;
+  }
+  dessinerPhoto();
   dessiner();
   bandeau();
 

@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://ntfy.sh; img-src 'self' data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://ntfy.sh; img-src 'self' data:; media-src blob:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow">
@@ -12,10 +12,12 @@
 </head>
 <body>
   <header class="haut">
-    <span class="avatar" aria-hidden="true">✉️</span>
+    <button id="ma-photo" class="avatar" type="button" aria-label="Choisir ma photo" disabled>✉️</button>
+    <input id="choix-photo" type="file" accept="image/*" hidden>
     <div>
       <h1 id="titre">Un petit mot</h1>
       <p id="sous-titre">Chargement…</p>
+      <p id="photo-etat" class="photo-etat" hidden></p>
     </div>
   </header>
 
@@ -23,7 +25,13 @@
 
   <p id="hors-ligne" class="bandeau" role="status" hidden>Pas de connexion&nbsp;: ton message partira dès que possible</p>
 
+  <p id="avis" class="bandeau" role="status" hidden></p>
+
   <form id="saisie" hidden>
+    <label class="joindre" title="Envoyer une photo, un GIF ou une vidéo">
+      <span aria-hidden="true">📎</span><span class="cache">Envoyer une photo, un GIF ou une vidéo</span>
+      <input id="choix-fichier" type="file" accept="image/*,video/*" hidden>
+    </label>
     <label for="texte" class="cache">Ton message</label>
     <textarea id="texte" rows="2" maxlength="300" placeholder="Écris ton message…"></textarea>
     <button id="envoyer" type="submit">Envoyer</button>
