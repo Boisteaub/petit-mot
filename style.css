@@ -7,6 +7,8 @@
   --sauge-fonce: #4F6B54;
   --sauge-clair: #E6EFE4;
   --terracotta: #C8553D;
+  --rouge: #A3402B;          /* texte d'erreur : contraste ≥ 4,5:1 sur les bulles */
+  --alerte: #FFF1D6;
   --encre: #2F3A31;
   --gris: #5F625B;
   --trait: #E8E0D2;
@@ -16,6 +18,8 @@
 }
 
 * { box-sizing: border-box; }
+
+[hidden] { display: none !important; }
 
 html, body { height: 100%; }
 
@@ -56,7 +60,7 @@ h1 {
 
 #sous-titre {
   margin: 2px 0 0;
-  font-size: 15px;
+  font-size: 17px;
   color: var(--gris);
 }
 
@@ -100,12 +104,29 @@ main {
 .bulle small {
   display: block;
   margin-top: 4px;
-  font-size: 13px;
+  font-size: 17px;
   color: var(--gris);
   text-align: right;
 }
 
 .bulle .remis { color: var(--sauge-fonce); font-weight: 700; }
+
+.reessayer {
+  display: block;
+  min-height: 48px;
+  margin: 8px 0 2px auto;
+}
+
+.bandeau {
+  margin: 0;
+  padding: 10px 16px;
+  background: var(--alerte);
+  box-shadow: 0 -1px 0 var(--trait);
+  color: var(--encre);
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+}
 
 form {
   display: flex;
@@ -146,12 +167,21 @@ button:disabled { opacity: .5; }
 .note {
   margin: 0;
   padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
-  font-size: 14px;
+  font-size: 17px;
   color: var(--gris);
   text-align: center;
 }
 
 .note:empty { display: none; }
+
+.fin {
+  margin: 0;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+  background: var(--blanc);
+  box-shadow: 0 -1px 0 var(--trait);
+  font-weight: 700;
+  text-align: center;
+}
 
 .cache {
   position: absolute;
@@ -161,10 +191,12 @@ button:disabled { opacity: .5; }
   clip: rect(0 0 0 0);
 }
 
-.erreur { color: var(--terracotta); font-weight: 700; }
+.erreur { color: var(--rouge); font-weight: 700; }
 
 @media (prefers-color-scheme: dark) {
-  :root { --creme: #1F2420; --blanc: #2A302B; --encre: #EEF1EC; --gris: #B9C0B6; --trait: #3A423B; --sauge-clair: #34413A; --sauge-fonce: #8FB394; }
+  :root { --creme: #1F2420; --blanc: #2A302B; --encre: #EEF1EC; --gris: #B9C0B6; --trait: #3A423B; --sauge-clair: #34413A; --sauge-fonce: #8FB394; --rouge: #FFB4A2; --alerte: #4A3E26; }
   .bulle.moi { background: #33503A; }
+  .bulle .remis { color: #B5D6B9; }
   button { background: #4F6B54; }
+  .reessayer { background: #DCEFD9; color: #1F2420; }
 }

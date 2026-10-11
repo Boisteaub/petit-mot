@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://ntfy.sh; img-src 'self' data:; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow">
@@ -20,11 +21,15 @@
 
   <main id="fil" aria-live="polite"></main>
 
+  <p id="hors-ligne" class="bandeau" role="status" hidden>Pas de connexion&nbsp;: ton message partira dès que possible</p>
+
   <form id="saisie" hidden>
     <label for="texte" class="cache">Ton message</label>
     <textarea id="texte" rows="2" maxlength="300" placeholder="Écris ton message…"></textarea>
     <button id="envoyer" type="submit">Envoyer</button>
   </form>
+
+  <p id="plus-valable" class="fin" hidden>Ce lien n'est plus valable. Demande un nouveau lien aux parents.</p>
 
   <p id="note" class="note"></p>
 
