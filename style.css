@@ -225,3 +225,22 @@ button.avatar:focus-visible, .joindre:focus-within { outline: 3px solid var(--sa
 .bulle .apercu { display: block; max-width: 100%; max-height: 240px; margin-bottom: 6px; border-radius: 12px; }
 .bulle .media { font-weight: 700; }
 .bulle .progres { color: var(--sauge-fonce); font-weight: 700; }
+
+/* ---------------------------------------------------------------- messages vocaux (12/10) */
+button.micro { flex: none; width: 52px; padding: 0; background: var(--sauge-clair); font-size: 24px; }
+.enregistrement {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  background: var(--blanc);
+  box-shadow: 0 -1px 0 var(--trait);
+}
+.enregistrement[hidden] { display: none; }
+.enregistrement .point { width: 14px; height: 14px; border-radius: 50%; background: var(--terracotta); animation: battre 1s ease-in-out infinite; }
+.enregistrement b { font-size: 20px; min-width: 3.2em; }
+.enregistrement .aide-voix { flex: 1; color: var(--gris); font-size: 16px; }
+.enregistrement button.second { background: var(--sauge-clair); color: var(--sauge-fonce); }
+@keyframes battre { 50% { opacity: .3; } }
+.bulle .ecouter { min-height: 48px; padding: 0 16px; margin-bottom: 4px; }
+.bulle .attente-voix { color: var(--gris); font-size: 16px; }

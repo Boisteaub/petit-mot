@@ -32,10 +32,19 @@
       <span aria-hidden="true">📎</span><span class="cache">Envoyer une photo, un GIF ou une vidéo</span>
       <input id="choix-fichier" type="file" accept="image/*,video/*" hidden>
     </label>
+    <button id="micro" class="micro" type="button" aria-label="Enregistrer un message vocal">🎤</button>
     <label for="texte" class="cache">Ton message</label>
     <textarea id="texte" rows="2" maxlength="300" placeholder="Écris ton message…"></textarea>
     <button id="envoyer" type="submit">Envoyer</button>
   </form>
+
+  <div id="enregistrement" class="enregistrement" role="status" hidden>
+    <span class="point" aria-hidden="true"></span>
+    <b id="duree-voix">0:00</b>
+    <span class="aide-voix">Parle, puis touche « Envoyer »</span>
+    <button id="voix-annuler" type="button" class="second">Annuler</button>
+    <button id="voix-envoyer" type="button">Envoyer</button>
+  </div>
 
   <p id="plus-valable" class="fin" hidden>Ce lien n'est plus valable. Demande un nouveau lien aux parents.</p>
 

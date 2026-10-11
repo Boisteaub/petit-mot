@@ -107,7 +107,7 @@
     return el;
   }
 
-  const NOMS_MEDIA = { photo: '📷 Photo', gif: '🎞️ GIF', video: '🎬 Vidéo' };
+  const NOMS_MEDIA = { photo: '📷 Photo', gif: '🎞️ GIF', video: '🎬 Vidéo', vocal: '🎙️ Message vocal' };
   const minutes = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
   function bulle(m) {
@@ -115,7 +115,11 @@
     const perdu = m.media && m.etat === 'erreur' && !fichiersPrets.has(m.n);
     const aRenvoyer = m.moi && m.etat === 'erreur' && !revoque && !perdu;
     const relancer = () => (m.media ? envoyerMedia(m) : envoyer(m));
-    const contenu = m.media
+    const contenu = !m.moi && m.media === 'vocal'
+      ? [h('button', { type: 'button', class: 'ecouter', onclick: () => ecouterVoix(m) },
+          voixEnCours === m.id ? '⏸ Arrêter' : `▶ Écouter${m.duree ? `${NBSP}· ${minutes(m.duree)}` : ''}`),
+        m.attente ? h('p', { class: 'attente-voix' }, 'Je la redemande à la maison…') : null]
+      : m.media
       ? [m.apercu ? h('img', { class: 'apercu', src: m.apercu, alt: NOMS_MEDIA[m.media] }) : h('p', { class: 'media' }, NOMS_MEDIA[m.media]
           + (m.duree ? `${NBSP}· ${minutes(m.duree)}` : '')),
         m.texte ? h('p', {}, m.texte) : null]
@@ -188,8 +192,18 @@
     let p;
     try { p = JSON.parse(texte); } catch (e) { return; }
     if (p.type === 'message' && p.de === 'enfant') {
-      if (!memoire.messages.some((m) => !m.moi && m.id === p.id)) {      // déjà là si la maison le renvoie
-        memoire.messages.push({ moi: false, id: p.id, texte: p.texte, cree: p.cree || evenement.time });
+      const piece = evenement.attachment || null;      // sa voix : le fichier chiffré est la pièce jointe du relais
+      let m = memoire.messages.find((x) => !x.moi && x.id === p.id);    // déjà là si la maison le renvoie
+      if (!m) {
+        m = { moi: false, id: p.id, texte: p.texte, cree: p.cree || evenement.time };
+        memoire.messages.push(m);
+      }
+      if (p.media === 'vocal') {
+        Object.assign(m, { media: 'vocal', duree: p.duree || 0 });
+        if (piece && piece.url) {
+          Object.assign(m, { url: piece.url, expire: piece.expires || 0 });
+          if (m.attente) { delete m.attente; setTimeout(() => ecouterVoix(m), 0); }     // elle l'avait redemandée
+        }
       }
     } else if (p.type === 'message' && p.de === 'contact') {
       const m = memoire.messages.find((x) => x.moi && x.n === p.n);
@@ -548,6 +562,131 @@
     envoyerMedia(m);
   }
 
+  // ---------------------------------------------------------------- messages vocaux
+  //
+  // Sa voix, enregistrée ici (2 min au plus), part comme une photo : chiffrée, en pièce jointe du relais,
+  // acceptée par les parents. La voix de l'enfant arrive de la même façon ; le relais ne la garde que 3 h :
+  // plus tard, la page la redemande à la maison.
+
+  let enregistreur = null;
+  let debutVoix = 0;
+  let minuteurVoix = null;
+  let garderVoix = false;
+
+  const formatVoix = () => ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm']
+    .find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
+
+  async function commencerVoix() {
+    if (revoque || enregistreur) return;
+    let flux;
+    try {
+      flux = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      return avis('Le micro n\'est pas autorisé. Autorise-le dans ton navigateur, puis réessaie.');
+    }
+    const format = formatVoix();
+    let r;
+    try {
+      r = format ? new MediaRecorder(flux, { mimeType: format }) : new MediaRecorder(flux);
+    } catch (e) {
+      flux.getTracks().forEach((t) => t.stop());
+      return avis('Ce téléphone ne sait pas enregistrer la voix ici.');
+    }
+    const morceaux = [];
+    r.ondataavailable = (e) => { if (e.data && e.data.size) morceaux.push(e.data); };
+    r.onstop = async () => {
+      flux.getTracks().forEach((t) => t.stop());
+      clearInterval(minuteurVoix);
+      $('enregistrement').hidden = true;
+      $('saisie').hidden = revoque;
+      enregistreur = null;
+      const duree = Math.round((Date.now() - debutVoix) / 1000);
+      if (!garderVoix) return;
+      if (duree < 1 || !morceaux.length) return avis('Je n\'ai rien entendu. Touche 🎤, parle, puis « Envoyer ».');
+      const octets = new Uint8Array(await new Blob(morceaux).arrayBuffer());
+      const m = {
+        moi: true, n: Math.random().toString(36).slice(2, 12), media: 'vocal', texte: '', duree,
+        apercu: null, cree: Math.floor(Date.now() / 1000), etat: 'envoi',
+      };
+      fichiersPrets.set(m.n, octets);
+      memoire.messages.push(m);
+      envoyerMedia(m);
+    };
+    enregistreur = r;
+    garderVoix = false;
+    debutVoix = Date.now();
+    r.start();
+    $('saisie').hidden = true;
+    $('enregistrement').hidden = false;
+    $('duree-voix').textContent = '0:00';
+    minuteurVoix = setInterval(() => {
+      const s = Math.round((Date.now() - debutVoix) / 1000);
+      $('duree-voix').textContent = minutes(s);
+      if (s >= 120) finirVoix(true);                 // 2 min au plus
+    }, 250);
+  }
+
+  function finirVoix(envoyer) {
+    if (!enregistreur || enregistreur.state === 'inactive') return;
+    garderVoix = envoyer;
+    enregistreur.stop();
+  }
+
+  let voixEnCours = null;           // id de la voix de l'enfant en train d'être écoutée
+  let lecteur = null;
+  const voixPretes = new Map();     // id → adresse « blob: » déjà déchiffrée (réécouter sans retélécharger)
+
+  async function ecouterVoix(m) {
+    if (lecteur) {
+      lecteur.pause();
+      const meme = voixEnCours === m.id;
+      lecteur = null;
+      voixEnCours = null;
+      dessiner();
+      if (meme) return;
+    }
+    let adresse = voixPretes.get(m.id);
+    if (!adresse) {
+      let clair = null;
+      if (m.url && (!m.expire || m.expire > Date.now() / 1000 + 30)) {
+        try {
+          const r = await fetch(m.url);
+          if (r.ok) clair = await Chiffre.ouvrirFichier(L.k, new Uint8Array(await r.arrayBuffer()));
+        } catch (e) { /* plus sur le relais, ou pas de réseau */ }
+      }
+      if (!clair) {
+        if (revoque) return avis('Ce message n\'est plus disponible.');
+        m.attente = true;
+        dessiner();
+        try {
+          await publier({ type: 'renvoyer', de: 'contact', id: m.id });
+        } catch (e) {
+          delete m.attente;
+          dessiner();
+          return avis('Pas de connexion : réessaie dans un moment.');
+        }
+        return;
+      }
+      adresse = URL.createObjectURL(new Blob([clair], { type: 'audio/wav' }));
+      voixPretes.set(m.id, adresse);
+    }
+    lecteur = new Audio(adresse);
+    voixEnCours = m.id;
+    lecteur.onended = () => { lecteur = null; voixEnCours = null; dessiner(); };
+    dessiner();
+    try {
+      await lecteur.play();
+    } catch (e) {
+      lecteur = null;
+      voixEnCours = null;
+      dessiner();
+    }
+  }
+
+  $('micro').addEventListener('click', commencerVoix);
+  $('voix-annuler').addEventListener('click', () => finirVoix(false));
+  $('voix-envoyer').addEventListener('click', () => finirVoix(true));
+
   $('ma-photo').addEventListener('click', () => { if (!revoque && !photoEnVol) $('choix-photo').click(); });
   $('choix-photo').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) envoyerPhoto(f); });
   $('choix-fichier').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) joindre(f); });
@@ -558,6 +697,7 @@
   // un message resté « Envoi… » (page fermée trop tôt) repartira tout seul.
   memoire.messages = memoire.messages.filter((m) => Date.now() / 1000 - m.cree < 60 * JOUR);
   for (const m of memoire.messages) if (m.moi && m.etat === 'envoi') m.etat = 'erreur';
+  for (const m of memoire.messages) delete m.attente;        // une voix redemandée avant de fermer la page
   if (photo && photo.etat === 'envoi') photo.etat = 'erreur';
 
   if (revoque) montrerRevoque();

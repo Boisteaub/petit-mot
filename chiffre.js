@@ -157,5 +157,30 @@
     return resultat;
   }
 
-  racine.Chiffre = { sceller, ouvrir, depuisBase64, scellerFichier };
+  /** Inverse de scellerFichier (voix d'Alice envoyées par la maison) : les octets, ou null si le fichier est abîmé. */
+  async function ouvrirFichier(cleHex, scelle) {
+    if (scelle.length < 48) return null;
+    const cle = hex(cleHex);
+    const kFlux = await hmac(cle, enc.encode('fichier'));
+    const kSceau = await hmac(cle, enc.encode('sceller-fichier'));
+    const fin = scelle.length - 32;
+    const attendu = await hmac(kSceau, scelle.subarray(0, fin));
+    let ecart = 0;
+    for (let i = 0; i < 32; i++) ecart |= attendu[i] ^ scelle[fin + i];
+    if (ecart !== 0) return null;
+    const entete = new Uint32Array(12);
+    const vue = new DataView(concat(kFlux, scelle.subarray(0, 16)).buffer);
+    for (let i = 0; i < 12; i++) entete[i] = vue.getUint32(i * 4);
+    const clair = scelle.slice(16, fin);
+    const mots = new Uint32Array(8);
+    for (let i = 0; i < Math.ceil(clair.length / 32); i++) {
+      blocFlux(entete, i, mots);
+      for (let j = 0; j < 32 && i * 32 + j < clair.length; j++) {
+        clair[i * 32 + j] ^= (mots[j >> 2] >>> (24 - 8 * (j & 3))) & 0xff;
+      }
+    }
+    return clair;
+  }
+
+  racine.Chiffre = { sceller, ouvrir, depuisBase64, scellerFichier, ouvrirFichier };
 })(typeof window !== 'undefined' ? window : globalThis);
