@@ -211,7 +211,7 @@
       else memoire.messages.push({ moi: true, n: p.n, texte: p.texte, cree: p.cree || evenement.time, etat: 'envoye' });
     } else if (p.type === 'media' && p.de === 'contact') {
       const m = memoire.messages.find((x) => x.moi && x.n === p.n);
-      if (m) avancer(m, 'envoye');
+      if (m && (p.i || 0) === (p.total || 1) - 1 && !enVol.has(m.n)) avancer(m, 'envoye');     // le dernier morceau
     } else if (p.type === 'photo' && p.de !== 'contact') {
       if (photo && photo.n === p.n && ['recue', 'acceptee', 'refusee'].includes(p.etat)) {
         photo.etat = p.etat;
@@ -461,6 +461,7 @@
   // l'acceptent, puis il arrive sur la télé.
 
   const OCTETS_MAX = 15000000;
+  const MORCEAU = 2000000;              // sans compte, le relais n'accepte pas plus de 2 Mo par fichier : on découpe
   const fichiersPrets = new Map();      // n → octets du fichier (pour « Réessayer » tant que la page est ouverte)
 
   function dureeVideo(fichier) {
@@ -520,16 +521,21 @@
     sauver();
     dessiner();
     try {
-      const enveloppe = await Chiffre.sceller(L.k, JSON.stringify({
-        type: 'media', de: 'contact', n: m.n, genre: m.media, legende: m.texte || '', duree: m.duree || 0, cree: m.cree,
-      }));
       const chiffre = await Chiffre.scellerFichier(L.k, octets, (f) => { m.progres = f * 0.1; montrerProgres(m); });
-      await deposer(chiffre, enveloppe, (f) => { m.progres = 0.1 + f * 0.9; montrerProgres(m); });
+      const total = Math.ceil(chiffre.length / MORCEAU);
+      for (let i = 0; i < total; i++) {
+        const enveloppe = await Chiffre.sceller(L.k, JSON.stringify({
+          type: 'media', de: 'contact', n: m.n, genre: m.media, legende: m.texte || '', duree: m.duree || 0, cree: m.cree, i, total,
+        }));
+        await deposer(chiffre.subarray(i * MORCEAU, (i + 1) * MORCEAU), enveloppe,
+          (f) => { m.progres = 0.1 + (0.9 * (i + f)) / total; montrerProgres(m); });
+      }
       relaisRepond(true);
       avancer(m, 'envoye');
       fichiersPrets.delete(m.n);
     } catch (e) {
       if (m.etat === 'envoi') m.etat = 'erreur';
+      if (e.message === '413') avis('Le relais a reçu beaucoup d\'envois : réessaie dans quelques heures.');
       if (navigator.onLine === false) relaisRepond(false);
     }
     enVol.delete(m.n);
