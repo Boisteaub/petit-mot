@@ -53,7 +53,7 @@
 
   document.title = `Un petit mot pour ${enfant}`;
   $('titre').textContent = `Écrire à ${enfant}`;
-  $('sous-titre').textContent = `${contact ? `Bonjour ${contact}` : 'Bonjour'}${FINE}! Tes messages sont lus par ses parents avant d'arriver sur sa télé.`;
+  $('sous-titre').textContent = `${contact ? `Bonjour ${contact}` : 'Bonjour'}${FINE}! Tes messages arrivent sur sa télé, et ses parents les voient aussi.`;
   $('texte').placeholder = `Écris ton message à ${enfant}…`;
   $('note').textContent = `Garde ce lien pour toi${NBSP}: il sert à écrire à ${enfant}.`;
 
